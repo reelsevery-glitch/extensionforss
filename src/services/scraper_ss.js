@@ -23,8 +23,12 @@ async function scrape_ss(url) {
     const listing = nextData?.props?.pageProps?.applicationData;
     if (!listing) return null;
 
+    // FIX: სურათების სრული URL — fileName-ს შეიძლება სრული URL ჰქონდეს ან ფაილის სახელი
     const images = listing.appImages || [];
-    const files = images.sort((a, b) => a.orderNo - b.orderNo).map(img => img.fileName).filter(Boolean);
+    const files = images
+      .sort((a, b) => (a.orderNo || 0) - (b.orderNo || 0))
+      .map(img => img.fileName)
+      .filter(Boolean);
 
     const address = listing.address || {};
     const desc = listing.description || {};
@@ -34,8 +38,14 @@ async function scrape_ss(url) {
     if (typeof stateNum === 'string' && STATE_MAP[stateNum]) stateNum = STATE_MAP[stateNum];
     else if (stateNum) stateNum = parseInt(stateNum);
 
-    const projectNum = listing.projectId || listing.project
+    const projectNum = (listing.projectId || listing.project)
       ? parseInt(listing.projectId || listing.project) : null;
+
+    // FIX: totalFloors — SS.GE-ზე 'floors' და 'totalFloors' ორივე შეიძლება
+    const totalFloors = listing.totalFloors || listing.floors || listing.floorQuantity || null;
+
+    // FIX: აღწერა — მრავალი შესაძლო field
+    const descriptionGe = desc.ka || desc.ge || desc.text || listing.descriptionGe || listing.description || '';
 
     const template = {
       realEstateDealTypeId: listing.realEstateDealTypeId,
@@ -49,17 +59,19 @@ async function scrape_ss(url) {
       areaOfHouse: listing.areaOfHouse ? parseFloat(listing.areaOfHouse) : null,
       kitchenArea: listing.kitchenArea ? parseFloat(listing.kitchenArea) : null,
       floor: listing.floor ? parseInt(listing.floor) : null,
-      totalFloors: listing.floors ? parseInt(listing.floors) : null,
+      // FIX: სართულების რაოდენობა
+      totalFloors: totalFloors ? parseInt(totalFloors) : null,
       rooms: listing.rooms ? parseInt(listing.rooms) : null,
       bedrooms: listing.bedrooms ? parseInt(listing.bedrooms) : null,
       toilet: listing.toilet ? parseInt(listing.toilet) : null,
       balcony_Loggia: listing.balcony_Loggia ? parseInt(listing.balcony_Loggia) : null,
-      priceUsd: price.priceUsd || null,
-      priceGeo: price.priceGeo || null,
+      // FIX: ფასი არ გადმოდის
+      // priceUsd და priceGeo წაშლილია მომხმარებლის მოთხოვნით
       currencyType: price.currencyType || 2,
-      descriptionGe: desc.ka || desc.text || '',
-      descriptionEn: desc.en || '',
-      descriptionRu: desc.ru || '',
+      // FIX: აღწერა
+      descriptionGe: descriptionGe,
+      descriptionEn: desc.en || descriptionGe,
+      descriptionRu: desc.ru || descriptionGe,
       realEstateStatusId: listing.realEstateStatusId || null,
       state: stateNum !== null && !isNaN(stateNum) ? stateNum : undefined,
       project: projectNum !== null && !isNaN(projectNum) ? projectNum : undefined,
@@ -95,7 +107,7 @@ async function scrape_ss(url) {
       phoneNumbers: [{ phoneNumber: '' }],
     };
 
-    const title = listing.title || desc.ka?.substring(0, 60) || 'განცხადება';
+    const title = listing.title || descriptionGe?.substring(0, 60) || 'Statement';
     return { template, files, title };
   } catch (e) {
     console.error('SS Scrape error:', e.message);
