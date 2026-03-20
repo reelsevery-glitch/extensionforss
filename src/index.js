@@ -45,4 +45,6 @@ initDB().then(() => {
     console.log(`✅ სერვერი გაეშვა: http://localhost:${PORT}`);
   });
 }).catch(e => {
-  console.error('სერვერის გაშვება ვერ მოხდ
+  console.error('სერვერის გაშვება ვერ მოხდა:', e.message);
+  process.exit(1);
+});
