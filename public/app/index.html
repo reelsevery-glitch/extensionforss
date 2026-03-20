@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyEstate პანელი</title>
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --surface: #16161a;
+      --surface2: #1e1e24;
+      --border: #2a2a35;
+      --accent: #7c3aed;
+      --accent2: #a855f7;
+      --accent-glow: rgba(124, 58, 237, 0.25);
+      --green: #22c55e;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --text: #e8e8f0;
+      --text-muted: #6b6b80;
+      --text-dim: #9999aa;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 0 12px var(--accent-glow); }
+    .logo-text { font-size: 14px; font-weight: 700; background: linear-gradient(135deg, #fff, var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .user-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 11px; color: var(--text-dim); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .close-btn { width: 28px; height: 28px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--red); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: all 0.15s; }
+    .close-btn:hover { background: rgba(239,68,68,0.3); }
+    .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; gap: 4px; }
+    .tab { padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab:hover { color: var(--text-dim); }
+    .tab.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+    .content { padding: 14px; max-height: calc(100vh - 90px); overflow-y: auto; }
+    .content::-webkit-scrollbar { width: 4px; }
+    .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; text-align: center; }
+    .stat-num { font-size: 20px; font-weight: 700; color: var(--accent2); }
+    .stat-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .draft-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; transition: border-color 0.15s, transform 0.15s; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+    .draft-card:hover { border-color: rgba(124,58,237,0.4); transform: translateY(-1px); }
+    .draft-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .draft-info { flex: 1; min-width: 0; }
+    .draft-title { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+    .draft-meta { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .draft-badges { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+    .badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+    .badge-source-ss { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+    .badge-source-mh { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+    .badge-ss { background: rgba(59,130,246,0.1); color: #93c5fd; border: 1px solid rgba(59,130,246,0.15); }
+    .badge-mh { background: rgba(34,197,94,0.1); color: #86efac; border: 1px solid rgba(34,197,94,0.15); }
+    .draft-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+    .btn { padding: 5px 10px; border: none; border-radius: 7px; cursor: pointer; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.15s; white-space: nowrap; }
+    .btn:hover { opacity: 0.85; transform: scale(0.97); }
+    .btn-ss { background: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+    .btn-mh { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .btn-del { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+    .draft-bottom { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .btn-full { flex: 1; justify-content: center; padding: 7px; }
+    .empty { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-title { font-size: 14px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+    .empty-sub { font-size: 12px; line-height: 1.8; }
+    .loading { display: flex; align-items: center; justify-content: center; padding: 50px; gap: 10px; color: var(--text-muted); font-size: 13px; }
+    .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent2); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .help-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+    .help-title { font-size: 11px; font-weight: 700; color: var(--accent2); margin-bottom: 10px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .help-step { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+    .help-step:last-child { border-bottom: none; }
+    .step-num { width: 20px; height: 20px; background: var(--accent-glow); border: 1px solid var(--accent); color: var(--accent2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 18px; border-radius: 10px; font-size: 12px; z-index: 9999; transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); pointer-events: none; }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .confirm-overlay.show { opacity: 1; pointer-events: all; }
+    .confirm-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 280px; text-align: center; }
+    .confirm-icon { font-size: 32px; margin-bottom: 12px; }
+    .confirm-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .confirm-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 20px; }
+    .confirm-btns { display: flex; gap: 8px; }
+    .confirm-btns .btn { flex: 1; justify-content: center; padding: 10px; font-size: 12px; }
+    .btn-cancel { background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">🏠</div>
+    <span class="logo-text">MyEstate</span>
+  </div>
+  <div class="header-right">
+    <div class="user-chip" id="user_info">იტვირთება...</div>
+    <button class="close-btn" onclick="closePanel()">✕</button>
+  </div>
+</div>
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('drafts', this)">📋 დრაფტები</div>
+  <div class="tab" onclick="switchTab('help', this)">❓ დახმარება</div>
+</div>
+<div class="content" id="content">
+  <div class="loading"><div class="spinner"></div> იტვირთება...</div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="confirm-overlay" id="confirm_overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title">წაშლა</div>
+    <div class="confirm-sub">დრაფტი სამუდამოდ წაიშლება</div>
+    <div class="confirm-btns">
+      <button class="btn btn-cancel" onclick="closeConfirm()">გაუქმება</button>
+      <button class="btn btn-del" id="confirm_yes">წაშლა</button>
+    </div>
+  </div>
+</div>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const TOKEN = params.get('token');
+  const API = window.location.origin + '/';
+  let drafts = [];
+
+  function closePanel() { window.parent.postMessage({ type: 'CLOSE_BASE_MODAL' }, '*'); }
+
+  async function init() {
+    if (!TOKEN) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><div class="empty-title">ავტორიზაცია საჭიროა</div></div>'; return; }
+    try {
+      const r = await fetch(API + 'auth/login/access-token', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN } });
+      const d = await r.json();
+      if (d.user) document.getElementById('user_info').textContent = d.user.name || d.user.phone || 'მომხმარებელი';
+    } catch(e) {}
+    await loadDrafts();
+  }
+
+  async function loadDrafts() {
+    try {
+      const res = await fetch(API + 'drafts', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+      drafts = await res.json();
+      renderDrafts();
+    } catch(e) {
+      document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">კავშირი ვერ მოხდა</div></div>';
+    }
+  }
+
+  function renderDrafts() {
+    if (!drafts.length) {
+      document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">დრაფტები არ არის</div><div class="empty-sub">ss.ge ან myhome.ge-ზე გადადი<br>და 💾 ღილაკს დააჭირე</div></div>';
+      return;
+    }
+    const withSS = drafts.filter(d => d.ss_id).length;
+    const withMH = drafts.filter(d => d.myhome_id).length;
+    const stats = `<div class="stats-bar"><div class="stat-card"><div class="stat-num">${drafts.length}</div><div class="stat-label">სულ</div></div><div class="stat-card"><div class="stat-num">${withSS}</div><div class="stat-label">SS-ზე</div></div><div class="stat-card"><div class="stat-num">${withMH}</div><div class="stat-label">Myhome-ზე</div></div></div>`;
+    const cards = drafts.map(d => {
+      const date = new Date(d.created_at).toLocaleDateString('ka-GE');
+      const src = d.source === 'ss' ? `<span class="badge badge-source-ss">SS.GE</span>` : `<span class="badge badge-source-mh">MYHOME</span>`;
+      const ss = d.ss_id ? `<span class="badge badge-ss">✓ SS</span>` : '';
+      const mh = d.myhome_id ? `<span class="badge badge-mh">✓ MH</span>` : '';
+      return `<div class="draft-card"><div class="draft-top"><div class="draft-info"><div class="draft-title">${d.title || 'განცხადება #' + d.id}</div><div class="draft-meta"><span>${date}</span><span>·</span><span>#${d.id}</span></div><div class="draft-badges">${src}${ss}${mh}</div></div><div class="draft-actions"><button class="btn btn-del" onclick="confirmDelete(${d.id})">🗑</button></div></div><div class="draft-bottom"><button class="btn btn-ss btn-full" onclick="uploadToSS(${d.id})">🏠 SS.GE</button><button class="btn btn-mh btn-full" onclick="uploadToMyhome(${d.id})">🏡 Myhome</button></div></div>`;
+    }).join('');
+    document.getElementById('content').innerHTML = stats + cards;
+  }
+
+  function uploadToSS(id) { closePanel(); window.open(`https://home.ss.ge/ka/udzravi-qoneba/create/SH-${id}`, '_blank'); }
+  function uploadToMyhome(id) { closePanel(); window.open(`https://www.myhome.ge/ka/SH-${id}`, '_blank'); }
+
+  function confirmDelete(id) {
+    document.getElementById('confirm_overlay').classList.add('show');
+    document.getElementById('confirm_yes').onclick = () => deleteDraft(id);
+  }
+  function closeConfirm() { document.getElementById('confirm_overlay').classList.remove('show'); }
+
+  async function deleteDraft(id) {
+    closeConfirm();
+    await fetch(API + 'drafts/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + TOKEN } });
+    drafts = drafts.filter(d => d.id !== id);
+    renderDrafts();
+    showToast('✅ წაიშალა');
+  }
+
+  function switchTab(tab, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    if (tab === 'drafts') { loadDrafts(); return; }
+    document.getElementById('content').innerHTML = `
+      <div class="help-section"><div class="help-title">გამოყენება</div>
+        <div class="help-step"><div class="step-num">1</div><div>გადადი ss.ge ან myhome.ge-ზე</div></div>
+        <div class="help-step"><div class="step-num">2</div><div>გახსენი ნებისმიერი განცხადება</div></div>
+        <div class="help-step"><div class="step-num">3</div><div>დააჭირე 💾 ღილაკს — შეინახება დრაფტად</div></div>
+        <div class="help-step"><div class="step-num">4</div><div>პანელიდან აირჩიე სად გინდა ატვირთვა</div></div>
+      </div>
+      <div class="help-section"><div class="help-title">სწრაფი ატვირთვა</div>
+        <div class="help-step"><div class="step-num">🏠</div><div>მწვანე ღილაკი — SS.GE-ზე პირდაპირ</div></div>
+        <div class="help-step"><div class="step-num">🏡</div><div>ნარინჯისფერი ღილაკი — Myhome-ზე პირდაპირ</div></div>
+      </div>`;
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  document.getElementById('confirm_overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('confirm_overlay')) closeConfirm();
+  });
+
+  init();
+</script>
+</body>
+</html>
