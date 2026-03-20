@@ -1,94 +1,83 @@
-// ეს ფაილი სერვერიდან ჩაიტვირთება Extension-ის მიერ
-// განახლებისთვის მხოლოდ სერვერზე შეცვალე — Extension-ის ხელახლა დაყენება არ სჭირდება!
-
-const API_INSTANCE = 'https://my-extension-production-55ba.up.railway.app/'
+const API_INSTANCE = 'https://extensionforss-production.up.railway.app/'
 const FRONT_URL = API_INSTANCE + 'panel/'
 
 //=========================================================================================> AUTH
 let IS_AUTH = false
 
 setTimeout(async () => {
-  let currentUrl = document.URL
-  if (currentUrl.includes('home.ss.ge')) await check_auth_ss()
-  if (currentUrl.includes('myhome.ge')) await check_auth_myhome()
+  const url = document.URL
+  if (url.includes('home.ss.ge')) await check_auth_ss()
+  if (url.includes('myhome.ge')) await check_auth_myhome()
 }, 500)
 
 async function check_auth_ss() {
   const token_local = get_token_from_local_storage()
-  if (!token_local) { return }
-  let auth_data = null
+  if (!token_local) {
+    // ტოკენი არ არის — ველოდებით 🔑 ღილაკს
+    return
+  }
   try {
-    auth_data = await api_refresh_token(token_local)
+    const auth_data = await api_refresh_token(token_local)
+    if (!auth_data || auth_data.message) {
+      // ტოკენი ვადაგასულია — SS session-ით ვცდით
+      await verification_from_ss(false)
+      return
+    }
+    set_user_to_local_storage(auth_data.user)
+    set_token_to_local_storage(auth_data.accessToken)
+    IS_AUTH = true
   } catch(e) {
-    console.warn("MyEstate: სერვერთან კავშირი ვერ მოხდა")
-    return
+    console.warn('MyEstate: server unreachable')
   }
-  if (!auth_data || auth_data.message) {
-    await verification_from_ss(true)
-    return
-  }
-  set_user_to_local_storage(auth_data.user)
-  set_token_to_local_storage(auth_data.accessToken)
-  IS_AUTH = true
 }
 
 async function check_auth_myhome() {
   const url_params = new URLSearchParams(window.location.search)
   const token_url = url_params.get('SH-token')
   const token_local = get_token_from_local_storage()
-  let auth_data = null
-  if (token_url) auth_data = await api_refresh_token(token_url)
-  if (!token_url && token_local) auth_data = await api_refresh_token(token_local)
-  if (!auth_data) return
-  if (auth_data.message) {
-    set_user_to_local_storage(null)
-    set_token_to_local_storage(null)
-    alert(auth_data.message)
-    return
-  }
-  if (auth_data) {
+  if (!token_url && !token_local) return
+  try {
+    const auth_data = await api_refresh_token(token_url || token_local)
+    if (!auth_data || auth_data.message) return
     set_user_to_local_storage(auth_data.user)
     set_token_to_local_storage(auth_data.accessToken)
     IS_AUTH = true
-  }
-  if (token_url) {
-    window.location = 'https://www.myhome.ge'
+    if (token_url) window.location = 'https://www.myhome.ge'
+  } catch(e) {
+    console.warn('MyEstate: server unreachable')
   }
 }
 
 async function verification_from_ss(loading) {
-  const element = document.getElementById('__NEXT_DATA__')
-  if (!element) return
-  const obj = JSON.parse(element.textContent)
-  const session = obj.props.pageProps.session?.user
-  if (!session) { alert('არ ხართ ავტორიზირებული ss.ge-ზე'); return }
-  const data = {
-    ss_name: session.name,
-    ss_sub: session.sub,
-    ss_phone: Number(session.phone_number),
-    ss_pin: session.PIN
-  }
-  let res
   try {
-    res = await api_broker_login_pin(data)
+    const element = document.getElementById('__NEXT_DATA__')
+    if (!element) return
+    const obj = JSON.parse(element.textContent)
+    const session = obj.props.pageProps.session?.user
+    if (!session) { alert('SS.GE-ზე არ ხართ ავტორიზირებული'); return }
+    const data = {
+      ss_name: session.name,
+      ss_sub: session.sub,
+      ss_phone: Number(session.phone_number),
+      ss_pin: session.PIN
+    }
+    let res = await api_broker_login_pin(data)
     if (res.message) res = await api_broker_registration(data)
+    if (!res || res.message) {
+      console.warn('MyEstate auth error:', res?.message)
+      return
+    }
+    set_user_to_local_storage(res.user)
+    set_token_to_local_storage(res.accessToken)
+    IS_AUTH = true
+    // UI განახლება
+    const btn = document.getElementById('verification_btn_ss')
+    if (btn) btn.style.display = 'none'
+    await append_UI({ ss: true, myhome: false })
+    if (loading) setTimeout(() => insers_base_modal(), 500)
+    else insers_base_modal()
   } catch(e) {
-    // სერვერთან კავშირი ვერ მოხდა — extension-ი ჩართული რჩება, ჩუმად ვცდით
-    console.warn('MyEstate: სერვერთან კავშირი ვერ მოხდა, ხელახლა ვცდი...')
-    return
-  }
-  if (!res || res.message) {
-    // სერვერი პასუხობს მაგრამ შეცდომა აქვს — მხოლოდ console-ში ვწერთ, არ ვხვრეტთ UI-ს
-    console.warn('MyEstate auth error:', res?.message)
-    return
-  }
-  set_user_to_local_storage(res.user)
-  set_token_to_local_storage(res.accessToken)
-  IS_AUTH = true
-  if (loading) {
-    setTimeout(() => { insers_base_modal() }, 1500)
-  } else {
-    insers_base_modal()
+    console.warn('MyEstate verification error:', e.message)
   }
 }
 
@@ -100,9 +89,6 @@ function set_user_to_local_storage(user) {
 function set_token_to_local_storage(token) {
   if (token == null) localStorage.removeItem('myestate_token')
   else localStorage.setItem('myestate_token', token)
-}
-function get_user_from_local_storage() {
-  return JSON.parse(localStorage.getItem('myestate_user'))
 }
 function get_token_from_local_storage() {
   return localStorage.getItem('myestate_token')
@@ -135,15 +121,14 @@ async function api_refresh_token(token) {
 
 //=========================================================================================> UI
 
-// FIX: setInterval-ის ნაცვლად MutationObserver — არ იწვევს memory leak-ს
-// და UI-ს მხოლოდ მაშინ ამოწმებს, როდესაც DOM-ი იცვლება
+// MutationObserver — setInterval-ის ნაცვლად (memory leak არ არის)
 let _uiObserver = null
 let _lastUrl = ''
 
 function start_ui_observer() {
-  const currentUrl = document.URL
-  if (currentUrl.includes('https://home.ss.ge/')) append_UI({ ss: true, myhome: false })
-  if (currentUrl.includes('https://www.myhome.ge/')) append_UI({ ss: false, myhome: true })
+  const url = document.URL
+  if (url.includes('https://home.ss.ge/')) append_UI({ ss: true, myhome: false })
+  if (url.includes('https://www.myhome.ge/')) append_UI({ ss: false, myhome: true })
 
   if (_uiObserver) return
   _uiObserver = new MutationObserver(() => {
@@ -156,7 +141,6 @@ function start_ui_observer() {
   _uiObserver.observe(document.body, { childList: true, subtree: true })
 }
 
-// DOM მზად იყოს შემდეგ გავუშვათ
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', start_ui_observer)
 } else {
@@ -208,14 +192,13 @@ function get_loading_images_HTML() {
 }
 function get_modal_window_HTML() {
   const item = document.createElement("div")
-  // FIX: display:none დამატებული — index.html-თან თანმიმდევრული
-  item.innerHTML = `<div id="base_modal" class="base-modal" style="display:none;"><div id="base_modalContent" class="base-modal-content"></div></div>`
+  item.innerHTML = '<div id="base_modal" class="base-modal" style="display:none;"><div id="base_modalContent" class="base-modal-content"></div></div>'
   return item
 }
 function get_verification_btn_ss_HTML() {
   const item = document.createElement("div")
   item.id = 'verification_btn_ss'
-  item.title = 'SS.GE-ზე ავტორიზაცია'
+  item.title = 'ავტორიზაცია'
   item.style.cssText = 'width:34px;height:34px;margin:5px;cursor:pointer;background:#f44336;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;'
   item.textContent = '🔑'
   return item
@@ -237,26 +220,36 @@ async function append_UI(config) {
   if (!document.getElementById('loading_gif')) inner_container.appendChild(get_loading_gif_HTML())
   if (!document.getElementById('loading_images')) inner_container.appendChild(get_loading_images_HTML())
 
-  if (config.ss && !document.getElementById('verification_btn_ss')) {
+  // FIX: ავტორიზაციის ღილაკი — მხოლოდ მაშინ ჩანს როდესაც არ ვართ logged in
+  if (config.ss && !IS_AUTH && !document.getElementById('verification_btn_ss')) {
     buttons_container.appendChild(get_verification_btn_ss_HTML())
     document.getElementById('verification_btn_ss').addEventListener('click', () => verification_from_ss(false))
   }
 
-  if (!IS_AUTH) { inner_container.style.display = 'block'; return }
+  if (!IS_AUTH) {
+    inner_container.style.display = 'block'
+    return
+  }
+
+  // ავტორიზაციის ღილაკი დავმალოთ
+  const verBtn = document.getElementById('verification_btn_ss')
+  if (verBtn) verBtn.style.display = 'none'
 
   if (!document.getElementById('open_base_btn')) {
     buttons_container.appendChild(get_base_btn_HTML())
     validate_base_modal()
   }
 
+  // FIX: SS.GE-ზე მხოლოდ 💾 ღილაკი — /udzravi-qoneba/ გვერდზე
   if (config.ss && !document.getElementById('save_btn_ss')) {
-    const btn = get_save_btn_HTML('save_btn_ss', 'SS.GE-ზე შენახვა', '💾')
+    const btn = get_save_btn_HTML('save_btn_ss', 'შენახვა', '💾')
     buttons_container.appendChild(btn)
     btn.addEventListener('click', find_draft_SS)
   }
 
+  // FIX: Myhome-ზე მხოლოდ 💾 ღილაკი — /pr/ გვერდზე
   if (config.myhome && !document.getElementById('save_btn_myhome')) {
-    const btn = get_save_btn_HTML('save_btn_myhome', 'Myhome-ზე შენახვა', '💾')
+    const btn = get_save_btn_HTML('save_btn_myhome', 'შენახვა', '💾')
     buttons_container.appendChild(btn)
     btn.addEventListener('click', find_draft_myhome)
   }
@@ -303,7 +296,7 @@ function validate_base_modal() {
   let modal_open = false
 
   if (open_btn) {
-    open_btn.addEventListener('click', async () => {
+    open_btn.addEventListener('click', () => {
       modal.style.display = "block"
       modal_open = true
       insers_base_modal()
@@ -330,7 +323,6 @@ function destroy_base_modal() {
   const modal = document.getElementById('base_modal')
   const iframe = document.getElementById('myestate_frame')
   const inner = document.getElementById("inner_container")
-
   if (iframe) iframe.remove()
   if (modal) modal.style.display = "none"
   if (inner) inner.style.display = "block"
@@ -339,27 +331,22 @@ function destroy_base_modal() {
 function insers_base_modal() {
   const inner = document.getElementById("inner_container")
   if (inner) inner.style.display = "none"
-
   const modal = document.getElementById('base_modal')
   modal.style.display = "block"
-
   const modalContent = document.getElementById('base_modalContent')
   const token = get_token_from_local_storage()
-
   if (!token) { alert('ავტორიზაცია საჭიროა!'); return }
-
-  modalContent.innerHTML = `
-    <iframe id="myestate_frame" class="frame_custom" scrolling="yes"
-      src="${FRONT_URL}?token=${token}"
-      height="700" width="900" style="border-radius:12px; border:none;">
-    </iframe>
-  `
+  modalContent.innerHTML = `<iframe id="myestate_frame" class="frame_custom" scrolling="yes" src="${FRONT_URL}?token=${token}" height="700" width="900" style="border-radius:12px;border:none;"></iframe>`
 }
 
 //=========================================================================================> SS.GE
+
+// FIX: ავტომატური drafting გათიშულია — მხოლოდ 💾 ღილაკზე დაჭერით ინახება
 async function find_draft_SS() {
   const url = document.URL
   if (!url.includes('/udzravi-qoneba/')) return
+  // ატვირთვის გვერდზე არ ვინახავთ
+  if (url.includes('/create/') || url.includes('/edit/')) return
   toggle_loading_gif(true)
   const draft = await save_ss(url)
   if (!draft) { toggle_loading_gif(false); return }
@@ -383,44 +370,53 @@ async function fast_save_upload_to_ss() {
 }
 
 async function save_ss(url) {
-  const response = await fetch(`${API_INSTANCE}ss/save`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` },
-    body: JSON.stringify({ url })
-  })
-  const json = await response.json()
-  if (!response.ok) { toggle_loading_gif(false); alert(json.message); return null }
-  return json
+  try {
+    const response = await fetch(`${API_INSTANCE}ss/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` },
+      body: JSON.stringify({ url })
+    })
+    const json = await response.json()
+    if (!response.ok) { toggle_loading_gif(false); alert(json.message); return null }
+    return json
+  } catch(e) {
+    toggle_loading_gif(false)
+    alert('სერვერთან კავშირი ვერ მოხდა')
+    return null
+  }
 }
 
+// SS.GE-ზე ატვირთვის გვერდი — /create/SH-{id}
 var AUTO_PAY_SS = false
 setTimeout(async () => {
   const url = document.URL
   if (!url.includes('https://home.ss.ge/ka/udzravi-qoneba/create/SH-')) return
-  const match = document.URL.match(/\/SH-(\d+)/)
+  const match = url.match(/\/SH-(\d+)/)
   if (!match) return
   if (url.includes('auto-pay')) AUTO_PAY_SS = true
   const draft_id = Number(match[1])
-  if (!draft_id) { alert('განცხადება ვერ მოიძებნა'); return }
+  if (!draft_id) return
   create_home_ss(draft_id)
 }, 100)
 
 async function create_home_ss(draft_id) {
-  if (!return_access_token_home_ss()) { alert('ss.ge-ზე არ ხართ ავტორიზირებული'); return }
+  if (!return_access_token_home_ss()) { alert('SS.GE-ზე არ ხართ ავტორიზირებული'); return }
   await delete_draft_home_ss()
   const data = await get_draft_template_SS(draft_id)
   if (!data) { alert('განცხადება ვერ მოიძებნა'); return }
   const ss_template = data.template
   const files = data.files
   ss_template.phoneNumbers = [{ phoneNumber: return_phone_number_home_ss() }]
+  // აღწერა სამივე ენაზე
   if (ss_template.descriptionGe) {
-    ss_template['descriptionEn'] = ss_template.descriptionGe
-    ss_template['descriptionRu'] = ss_template.descriptionGe
+    ss_template.descriptionEn = ss_template.descriptionGe
+    ss_template.descriptionRu = ss_template.descriptionGe
   }
   const first_draft_ss = await create_draft_home_ss(ss_template)
-  const draft_id_ss = first_draft_ss.applicationId
+  const draft_id_ss = first_draft_ss?.applicationId
   if (!draft_id_ss) { alert('განცხადება ვერ შეიქმნა SS-ზე'); return }
-  await post_draft_images_home_ss(first_draft_ss.applicationId, files)
+  // FIX: ფოტოები თანმიმდევრულად — parallel upload
+  await post_draft_images_home_ss(draft_id_ss, files)
   await update_user_draft_db({ draft_id, ss_id: draft_id_ss })
   window.open(`https://home.ss.ge/ka/udzravi-qoneba/edit/${draft_id_ss}`, "_self")
 }
@@ -461,21 +457,31 @@ async function delete_draft_home_ss() {
     })
   } catch {}
 }
+
+// FIX: ფოტოები — თანმიმდევრულად იტვირთება (parallel) და progress bar ჩანს
 async function post_draft_images_home_ss(applicationId, files) {
-  const base64List = await Promise.all(files.map(f => url_to_base64(`${API_INSTANCE}images/${f}`)))
+  if (!files || files.length === 0) return
   let completed = 0
-  await Promise.all(base64List.map(async b64 => {
+  const uploadPromises = files.map(async (file) => {
     try {
+      const b64 = await url_to_base64(`${API_INSTANCE}images/${file}`)
       await fetch('https://api-gateway.ss.ge/v1/RealEstate/upload-image', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + return_access_token_home_ss(), "Content-Type": "application/json; charset=utf-8" },
+        headers: {
+          'Authorization': 'Bearer ' + return_access_token_home_ss(),
+          "Content-Type": "application/json; charset=utf-8"
+        },
         body: JSON.stringify({ applicationId, content: b64, is360: false, isGif: false })
       })
-    } catch {}
+    } catch(e) {
+      console.warn('Image upload error:', e.message)
+    }
     completed++
-    show_loading_images(completed, base64List.length)
-  }))
+    show_loading_images(completed, files.length)
+  })
+  await Promise.all(uploadPromises)
 }
+
 async function url_to_base64(url) {
   const res = await fetch(url)
   const blob = await res.blob()
@@ -487,6 +493,8 @@ async function url_to_base64(url) {
 }
 
 //=========================================================================================> MYHOME.GE
+
+// FIX: ავტომატური drafting გათიშულია — მხოლოდ 💾 ღილაკზე
 async function find_draft_myhome() {
   const url = document.URL
   if (!url.includes('/pr/')) return
@@ -515,25 +523,32 @@ async function fast_save_upload_to_myhome() {
 }
 
 async function save_myhome(url, owner_phone, next_data) {
-  const response = await fetch(`${API_INSTANCE}myhome/save/${owner_phone}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` },
-    body: JSON.stringify({ url, next_data: typeof next_data === 'string' ? JSON.parse(next_data) : next_data })
-  })
-  const json = await response.json()
-  if (!response.ok) { toggle_loading_gif(false); alert(json.message); return null }
-  return json
+  try {
+    const response = await fetch(`${API_INSTANCE}myhome/save/${owner_phone}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` },
+      body: JSON.stringify({ url, next_data: typeof next_data === 'string' ? JSON.parse(next_data) : next_data })
+    })
+    const json = await response.json()
+    if (!response.ok) { toggle_loading_gif(false); alert(json.message); return null }
+    return json
+  } catch(e) {
+    toggle_loading_gif(false)
+    alert('სერვერთან კავშირი ვერ მოხდა')
+    return null
+  }
 }
 
+// Myhome-ზე ატვირთვის გვერდი — /SH-{id}
 var AUTO_PAY_MYHOME = false
 setTimeout(async () => {
   const url = document.URL
-  if (!url.includes('https://www.myhome.ge/SH-')) return
-  const match = document.URL.match(/\/SH-(\d+)/)
+  if (!url.includes('https://www.myhome.ge/SH-') && !url.includes('https://www.myhome.ge/ka/SH-')) return
+  const match = url.match(/\/SH-(\d+)/)
   if (!match) return
   if (url.includes('auto-pay')) AUTO_PAY_MYHOME = true
   const draft_id = Number(match[1])
-  if (!draft_id) { alert('განცხადება ვერ მოიძებნა'); return }
+  if (!draft_id) return
   create_myhome(draft_id)
 }, 100)
 
@@ -545,15 +560,20 @@ async function create_myhome(draft_id) {
   const form_data = new FormData()
   for (const key in template) { form_data.append(key, template[key]) }
 
+  // FIX: ფოტოები — parallel upload
   let completed = 0
   const upload_promises = files.map(async (file, i) => {
-    const res = await create_images_MY(`${API_INSTANCE}images/${file}`)
+    try {
+      const res = await create_images_MY(`${API_INSTANCE}images/${file}`)
+      if (res?.result) {
+        form_data.append(`images[${i}][image_id]`, res.data.id)
+        form_data.append(`images[${i}][url]`, res.data.url)
+      }
+    } catch(e) {
+      console.warn('Myhome image upload error:', e.message)
+    }
     completed++
     show_loading_images(completed, files.length)
-    if (res.result) {
-      form_data.append(`images[${i}][image_id]`, res.data.id)
-      form_data.append(`images[${i}][url]`, res.data.url)
-    }
   })
   await Promise.all(upload_promises)
 
@@ -579,11 +599,11 @@ async function create_draft_MY(form_data, authtoken, draft_id) {
     await update_user_draft_db({ draft_id, myhome_id: json.data.uuid })
     if (AUTO_PAY_MYHOME) {
       const payment_resp = await get_pay_uuid_MY(json.data.uuid)
-      if (payment_resp) await pay_MY(payment_resp.data.payment_uuid)
+      if (payment_resp?.data?.payment_uuid) await pay_MY(payment_resp.data.payment_uuid)
     }
     location.href = `https://statements.tnet.ge/ka/statement/edit/${json.data.uuid}?referrer=myhome`
   } else {
-    const errs = json.errors?.map(e => e.messages).join(' | ') || 'უცნობი შეცდომა'
+    const errs = json.errors?.map(e => e.messages).join(' | ') || 'Unknown error'
     alert(errs)
   }
 }
@@ -661,11 +681,13 @@ function get_authorization_token_MY() {
 }
 
 async function update_user_draft_db(data) {
-  await fetch(`${API_INSTANCE}users/user_draft`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` },
-    body: JSON.stringify(data)
-  })
+  try {
+    await fetch(`${API_INSTANCE}users/user_draft`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` },
+      body: JSON.stringify(data)
+    })
+  } catch {}
 }
 
 setTimeout(async () => {
@@ -673,9 +695,11 @@ setTimeout(async () => {
   if (!url.includes('https://www.myhome.ge')) return
   const global_token = get_access_token_MY()
   if (global_token) {
-    await fetch(`${API_INSTANCE}myhome/update_global_authorization/${global_token}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` }
-    })
+    try {
+      await fetch(`${API_INSTANCE}myhome/update_global_authorization/${global_token}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${get_token_from_local_storage()}` }
+      })
+    } catch {}
   }
 }, 500)
